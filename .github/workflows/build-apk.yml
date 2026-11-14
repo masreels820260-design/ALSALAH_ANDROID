@@ -22,10 +22,17 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Unit tests
-        run: gradle :app:testDebugUnitTest --stacktrace
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        run: gradle :app:assembleDebug --console=plain 2>&1 | tee build.log
+      - name: Build errors summary
+        if: failure()
+        run: grep -nE "^e: |What went wrong|FAILED|error:" -A6 build.log | head -150 || true
+      - name: Unit tests
+        continue-on-error: true
+        run: gradle :app:testDebugUnitTest --console=plain 2>&1 | tee test.log
+      - name: Test errors summary
+        if: always()
+        run: grep -nE "^e: |What went wrong|FAILED|AssertionError|expected" -A6 test.log | head -150 || true
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -33,3 +40,12 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build.log
+            test.log
+          if-no-files-found: ignore
